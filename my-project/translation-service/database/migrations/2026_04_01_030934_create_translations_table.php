@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('translations', function (Blueprint $table) {
             $table->id();
-              $table->string('key'); // ✅ required
+              $table->string('key'); //  required
             $table->json('value'); // JSON for multiple languages
             $table->foreignId('language_id')->nullable()->constrained()->nullOnDelete(); 
             $table->timestamps();
