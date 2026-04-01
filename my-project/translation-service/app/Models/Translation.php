@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Translation extends Model
 {
-    use HasFactory; // ✅ This is required
+    use HasFactory; //  This is required
 
     protected $fillable = ['key', 'value'];
 
