@@ -41,22 +41,31 @@ class TranslationController extends Controller
     /**
      * Store a newly created translation.
      */
-    public function store(Request $request)
-    {
-        $data = $request->validate([
-            'key' => 'required|string|unique:translations,key',
-            'value' => 'required|array',
-            'tags' => 'array'
-        ]);
+   public function store(Request $request)
+{
+    $data = $request->validate([
+        'key' => 'required|string|unique:translations,key',
+        'value' => 'required|array',
+        'tags' => 'array' // Accept tag names
+    ]);
 
-        $translation = Translation::create($data);
+    // Create the translation
+    $translation = Translation::create([
+        'key' => $data['key'],
+        'value' => $data['value'],
+    ]);
 
-        if (isset($data['tags'])) {
-            $translation->tags()->sync($data['tags']);
-        }
-
-        return response()->json($translation, 201);
+    // Attach tags by name, creating new ones if they don't exist
+    if (isset($data['tags'])) {
+        $tagIds = collect($data['tags'])->map(function ($tagName) {
+            return Tag::firstOrCreate(['name' => $tagName])->id;
+        });
+        $translation->tags()->sync($tagIds);
     }
+
+    // Return translation with tags loaded
+    return response()->json($translation->load('tags'), 201);
+}
 
     /**
      * Display the specified translation.
@@ -70,24 +79,33 @@ class TranslationController extends Controller
     /**
      * Update the specified translation.
      */
-    public function update(Request $request, string $id)
-    {
-        $translation = Translation::findOrFail($id);
+   public function update(Request $request, string $id)
+{
+    $translation = Translation::findOrFail($id);
 
-        $data = $request->validate([
-            'key' => 'string|unique:translations,key,' . $translation->id,
-            'value' => 'array',
-            'tags' => 'array'
-        ]);
+    $data = $request->validate([
+        'key' => 'string|unique:translations,key,' . $translation->id,
+        'value' => 'array',
+        'tags' => 'array' // Accept tag names
+    ]);
 
-        $translation->update($data);
+    // Update translation key/value
+    $translation->update([
+        'key' => $data['key'] ?? $translation->key,
+        'value' => $data['value'] ?? $translation->value,
+    ]);
 
-        if (isset($data['tags'])) {
-            $translation->tags()->sync($data['tags']);
-        }
-
-        return response()->json($translation);
+    // Attach tags by name, creating new ones if needed
+    if (isset($data['tags'])) {
+        $tagIds = collect($data['tags'])->map(function ($tagName) {
+            return Tag::firstOrCreate(['name' => $tagName])->id;
+        });
+        $translation->tags()->sync($tagIds);
     }
+
+    // Return translation with tags loaded
+    return response()->json($translation->load('tags'));
+}
 
     /**
      * Remove the specified translation.
@@ -102,12 +120,20 @@ class TranslationController extends Controller
     /**
      * Export all translations as JSON (optimized for large datasets).
      */
-    public function export()
-    {
-        return response()->streamDownload(function () {
-            Translation::with('tags')->chunk(5000, function ($translations) {
-                echo $translations->toJson(JSON_UNESCAPED_UNICODE);
+   public function export()
+{
+    return response()->streamDownload(function () {
+        Translation::with('tags')->chunk(5000, function ($translations) {
+            $formatted = $translations->map(function ($t) {
+                return [
+                    'id'    => $t->id,
+                    'key'   => $t->key,
+                    'value' => $t->value, // JSON of locales
+                    'tags'  => $t->tags->pluck('name'), // just tag names
+                ];
             });
-        }, 'translations.json');
-    }
+            echo $formatted->toJson(JSON_UNESCAPED_UNICODE) . "\n";
+        });
+    }, 'translations.json');
+}
 }
